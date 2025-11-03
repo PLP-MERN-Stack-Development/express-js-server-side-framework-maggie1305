@@ -1,71 +1,91 @@
-// server.js - Starter Express server for Week 2 assignment
-
-// Import required modules
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 
-// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware setup
+// Middleware to parse JSON
 app.use(bodyParser.json());
 
-// Sample in-memory products database
-let products = [
-  {
-    id: '1',
-    name: 'Laptop',
-    description: 'High-performance laptop with 16GB RAM',
-    price: 1200,
-    category: 'electronics',
-    inStock: true
-  },
-  {
-    id: '2',
-    name: 'Smartphone',
-    description: 'Latest model with 128GB storage',
-    price: 800,
-    category: 'electronics',
-    inStock: true
-  },
-  {
-    id: '3',
-    name: 'Coffee Maker',
-    description: 'Programmable coffee maker with timer',
-    price: 50,
-    category: 'kitchen',
-    inStock: false
-  }
-];
-
-// Root route
-app.get('/', (req, res) => {
-  res.send('Welcome to the Product API! Go to /api/products to see all products.');
+// Logger middleware
+app.use((req, res, next) => {
+  const time = new Date().toISOString();
+  console.log(`[${time}] ${req.method} ${req.originalUrl}`);
+  next();
 });
 
-// TODO: Implement the following routes:
-// GET /api/products - Get all products
-// GET /api/products/:id - Get a specific product
-// POST /api/products - Create a new product
-// PUT /api/products/:id - Update a product
-// DELETE /api/products/:id - Delete a product
+// Authentication middleware
+function requireApiKey(req, res, next) {
+  const key = req.header('x-api-key');
+  const expected = process.env.API_KEY || 'test-api-key';
+  if (key !== expected) {
+    return res.status(401).json({ error: 'Invalid or missing API key' });
+  }
+  next();
+}
 
-// Example route implementation for GET /api/products
+// In-memory product storage
+let products = [
+  {
+    id: uuidv4(),
+    name: 'Blue T-Shirt',
+    description: 'Comfortable cotton t-shirt',
+    price: 19.99,
+    category: 'clothing',
+    inStock: true,
+  },
+  {
+    id: uuidv4(),
+    name: 'Running Shoes',
+    description: 'Lightweight running shoes',
+    price: 79.5,
+    category: 'footwear',
+    inStock: true,
+  },
+];
+
+// GET /api/products — list all
 app.get('/api/products', (req, res) => {
   res.json(products);
 });
 
-// TODO: Implement custom middleware for:
-// - Request logging
-// - Authentication
-// - Error handling
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+// GET /api/products/:id — get one
+app.get('/api/products/:id', (req, res) => {
+  const product = products.find(p => p.id === req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+  res.json(product);
 });
 
-// Export the app for testing purposes
-module.exports = app; 
+// POST /api/products — create
+app.post('/api/products', requireApiKey, (req, res) => {
+  const { name, description, price, category, inStock } = req.body;
+  if (!name || !description || typeof price !== 'number' || !category || typeof inStock !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid product data' });
+  }
+  const newProduct = { id: uuidv4(), name, description, price, category, inStock };
+  products.push(newProduct);
+  res.status(201).json(newProduct);
+});
+
+// PUT /api/products/:id — update
+app.put('/api/products/:id', requireApiKey, (req, res) => {
+  const product = products.find(p => p.id === req.params.id);
+  if (!product) return res.status(404).json({ error: 'Product not found' });
+  Object.assign(product, req.body);
+  res.json(product);
+});
+
+// DELETE /api/products/:id — delete
+app.delete('/api/products/:id', requireApiKey, (req, res) => {
+  const index = products.findIndex(p => p.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: 'Product not found' });
+  const deleted = products.splice(index, 1);
+  res.json({ deleted });
+});
+
+// Server start
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
